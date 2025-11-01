@@ -1,0 +1,8 @@
+{
+  "Some Name": {
+    "name": "The Name",
+    "description": "A description, This gets displayed to the Model to show the personality purpose.",
+    "prompt": "A Long detailed prompt that defines the personality of the model. when in this mode",
+    "enabled": true    
+  }
+}

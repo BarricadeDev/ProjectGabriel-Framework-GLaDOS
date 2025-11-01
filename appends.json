@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "append_items": [
+    {
+      "name": "Recent Memories",
+      "enabled": true,
+      "content": "{recent_memories}"
+    },    
+    {
+      "name": "Current Date",
+      "enabled": true,
+      "content": "Current date: {current_date} "
+    }
+]
+}

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Management - Gabriel Control Panel</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="memory-styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-brain"></i> Memory Management</h1>
+                <div class="header-nav">
+                    <nav class="main-nav">
+                        <a href="index.html" class="nav-link">
+                            <i class="fas fa-home"></i> Home
+                        </a>
+                        <a href="memory.html" class="nav-link active">
+                            <i class="fas fa-brain"></i> Memory
+                        </a>
+                    </nav>
+                    <div class="status-indicator">
+                        <span class="status-dot" id="statusDot"></span>
+                        <span class="status-text" id="statusText">Checking...</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            
+            <section class="controls-section">
+                <div class="card">
+                    <div class="memory-controls">
+                        
+                        <button id="addMemoryBtn" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Add New Memory
+                        </button>
+
+                        
+                        <div class="search-container">
+                            <div class="search-box">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="searchInput" placeholder="Search memories..." />
+                                <button id="clearSearchBtn" class="clear-search">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        
+                        <div class="filters">
+                            <select id="memoryTypeFilter" class="filter-select">
+                                <option value="">All Types</option>
+                                <option value="long_term">Long-term</option>
+                                <option value="short_term">Short-term</option>
+                                <option value="quick_note">Quick Notes</option>
+                            </select>
+                            
+                            <select id="categoryFilter" class="filter-select">
+                                <option value="">All Categories</option>
+                            </select>
+
+                            <button id="refreshBtn" class="btn btn-secondary">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card stats-card">
+                    <h3><i class="fas fa-chart-bar"></i> Memory Statistics <small style="font-size: 0.7em; color: #888; font-weight: normal;">(MongoDB)</small></h3>
+                    <div class="stats-grid" id="statsGrid">
+                        <div class="stat-item">
+                            <span class="stat-value" id="totalMemories">-</span>
+                            <span class="stat-label">Total Memories</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="longTermCount">-</span>
+                            <span class="stat-label">Long-term</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="shortTermCount">-</span>
+                            <span class="stat-label">Short-term</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="quickNoteCount">-</span>
+                            <span class="stat-label">Quick Notes</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="memory-section">
+                <div class="card memory-card">
+                    <div class="memory-header">
+                        <h2><i class="fas fa-database"></i> Memory Entries</h2>
+                        <div class="memory-info">
+                            <span id="memoryCount">0 memories</span>
+                        </div>
+                    </div>
+                    
+                    <div class="memory-content">
+                        
+                        <div id="loadingState" class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Connecting to Gabriel API...</span>
+                        </div>
+
+                        <div id="connectionErrorState" class="connection-error-state hidden">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Unable to connect to Gabriel API</h3>
+                            <p>Make sure Gabriel is running with API enabled on port 8000</p>
+                            <div class="connection-info">
+                                <p><strong>Trying to connect to:</strong> <span id="apiUrl"></span></p>
+                                <p><strong>Common solutions:</strong></p>
+                                <ul>
+                                    <li>Start Gabriel with API configuration enabled</li>
+                                    <li>Check if port 8000 is accessible</li>
+                                    <li>Verify memory endpoints are configured</li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-primary" onclick="testConnection()">
+                                <i class="fas fa-sync-alt"></i> Retry Connection
+                            </button>
+                        </div>
+
+                        <div id="emptyState" class="empty-state hidden">
+                            <i class="fas fa-brain"></i>
+                            <h3>No memories found</h3>
+                            <p>Start by adding your first memory or adjust your search filters.</p>
+                            <button class="btn btn-primary" onclick="openAddMemoryModal()">
+                                <i class="fas fa-plus"></i> Add Memory
+                            </button>
+                        </div>
+
+                        <div id="memoryTableContainer" class="memory-table-container hidden">
+                            <table class="memory-table" id="memoryTable">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-sort="key">
+                                            Key <i class="fas fa-sort"></i>
+                                        </th>
+                                        <th class="sortable" data-sort="category">
+                                            Category <i class="fas fa-sort"></i>
+                                        </th>
+                                        <th class="sortable" data-sort="memory_type">
+                                            Type <i class="fas fa-sort"></i>
+                                        </th>
+                                        <th class="sortable" data-sort="created_at">
+                                            Created <i class="fas fa-sort"></i>
+                                        </th>
+                                        <th class="sortable" data-sort="updated_at">
+                                            Updated <i class="fas fa-sort"></i>
+                                        </th>
+                                        <th class="sortable" data-sort="access_count">
+                                            Access Count <i class="fas fa-sort"></i>
+                                        </th>
+                                        <th class="actions-column">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="memoryTableBody">
+                                    
+                                </tbody>
+                            </table>
+                        </div>
+
+                        
+                        <div id="paginationContainer" class="pagination-container hidden">
+                            <div class="pagination-info">
+                                <span id="paginationInfo">Showing 1-10 of 50 memories</span>
+                            </div>
+                            <div class="pagination-controls">
+                                <button id="prevPageBtn" class="btn btn-secondary" disabled>
+                                    <i class="fas fa-chevron-left"></i> Previous
+                                </button>
+                                <span id="pageInfo">Page 1 of 5</span>
+                                <button id="nextPageBtn" class="btn btn-secondary">
+                                    Next <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        
+        <footer class="footer">
+            <p>&copy; 2025 Hoppou.AI Project Gabriel Framework | Storage: <i class="fas fa-database"></i> MongoDB</p>
+        </footer>
+    </div>
+
+    
+    <div id="memoryModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">
+                    <i class="fas fa-plus"></i> Add New Memory
+                </h3>
+                <button class="modal-close" onclick="closeMemoryModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="memoryForm" class="modal-body">
+                <div class="form-group">
+                    <label for="memoryKey">Key <span class="required">*</span></label>
+                    <input type="text" id="memoryKey" name="key" required maxlength="100" />
+                    <small class="form-help">Unique identifier for the memory (e.g., user_name, favorite_color)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="memoryContent">Content <span class="required">*</span></label>
+                    <textarea id="memoryContent" name="content" required rows="4" maxlength="5000"></textarea>
+                    <small class="form-help">The content to remember</small>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="memoryCategory">Category</label>
+                        <input type="text" id="memoryCategory" name="category" value="general" maxlength="50" />
+                        <small class="form-help">Category for organizing (e.g., personal, work)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="memoryType">Memory Type</label>
+                        <select id="memoryType" name="memory_type">
+                            <option value="long_term">Long-term (Permanent)</option>
+                            <option value="short_term">Short-term (7 days)</option>
+                            <option value="quick_note">Quick Note (6 hours)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="memoryTags">Tags</label>
+                    <input type="text" id="memoryTags" name="tags" placeholder="tag1, tag2, tag3" />
+                    <small class="form-help">Comma-separated tags for better organization</small>
+                </div>
+            </form>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeMemoryModal()">
+                    Cancel
+                </button>
+                <button type="submit" form="memoryForm" class="btn btn-primary" id="saveMemoryBtn">
+                    <i class="fas fa-save"></i> Save Memory
+                </button>
+            </div>
+        </div>
+    </div>
+
+    
+    <div id="deleteModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-trash"></i> Delete Memory
+                </h3>
+                <button class="modal-close" onclick="closeDeleteModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <p>Are you sure you want to delete this memory?</p>
+                <div class="delete-memory-info">
+                    <strong>Key:</strong> <span id="deleteMemoryKey"></span><br>
+                    <strong>Category:</strong> <span id="deleteMemoryCategory"></span><br>
+                    <strong>Type:</strong> <span id="deleteMemoryType"></span>
+                </div>
+                <p class="warning-text">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    This action cannot be undone.
+                </p>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                    <i class="fas fa-trash"></i> Delete Memory
+                </button>
+            </div>
+        </div>
+    </div>
+
+    
+    <div id="viewModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>
+                    <i class="fas fa-eye"></i> View Memory
+                </h3>
+                <button class="modal-close" onclick="closeViewModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="memory-details">
+                    <div class="detail-group">
+                        <label>Key:</label>
+                        <span id="viewMemoryKey"></span>
+                    </div>
+                    <div class="detail-group">
+                        <label>Content:</label>
+                        <div id="viewMemoryContent" class="content-display"></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-group">
+                            <label>Category:</label>
+                            <span id="viewMemoryCategory"></span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Type:</label>
+                            <span id="viewMemoryType" class="memory-type-badge"></span>
+                        </div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-group">
+                            <label>Created:</label>
+                            <span id="viewMemoryCreated"></span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Updated:</label>
+                            <span id="viewMemoryUpdated"></span>
+                        </div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-group">
+                            <label>Access Count:</label>
+                            <span id="viewMemoryAccessCount"></span>
+                        </div>
+                        <div class="detail-group">
+                            <label>Tags:</label>
+                            <div id="viewMemoryTags" class="tags-display"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeViewModal()">
+                    Close
+                </button>
+                <button type="button" class="btn btn-primary" id="editFromViewBtn">
+                    <i class="fas fa-edit"></i> Edit Memory
+                </button>
+            </div>
+        </div>
+    </div>
+
+    
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span id="loadingText">Processing...</span>
+        </div>
+    </div>
+
+    
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="memory.js"></script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+# The Nether... No JK the Configuration File
+
+# Audio Configuration / Gemini Live settings
+audio:
+  format: 16 
+  channels: 1
+  send_sample_rate: 16000
+  receive_sample_rate: 24000
+  chunk_size: 1024
+
+# Gemini Model Configuration
+model:
+  name: "models/gemini-live-2.5-flash-preview"
+
+# Default Settings
+defaults:
+  mode: "screen"  # Options: camera, screen, none
+
+# API Configuration
+api:
+  version: "v1beta"
+  api_key: "https://aistudio.google.com/api-keys"
+  
+  # Backup API Keys for automatic failover when quota is exceeded, You can add multiple keys here
+  backup_api_keys:
+    - "https://aistudio.google.com/api-keys"
+
+  # Chat API Configuration
+  chat:
+    enabled: true              # Enable/disable the REST API
+    host: "0.0.0.0"         # API server host
+    port: 8000                # API server port
+  
+  # WebUI Server Configuration
+  webui:
+    enabled: true              # Enable/disable the WebUI server
+    host: "0.0.0.0"            # WebUI server host
+    port: 5555                 # WebUI server port
+
+webhooks:
+  image_generation: "discord webhook url here"
+
+# Live Connect Configuration
+live_connect:
+  # Response modalities
+  response_modalities:
+    - "AUDIO"
+  
+  # Media resolution
+  media_resolution: "MEDIA_RESOLUTION_LOW" # Or "MEDIA_RESOLUTION_HIGH"
+  
+  # Speech configuration
+  speech:
+    language_code: "ta-IN" # https://ai.google.dev/gemini-api/docs/live-guide#supported-languages
+    voice:
+      name: "Puck" # https://ai.google.dev/gemini-api/docs/speech-generation#voices
+  
+  # Context window compression, The Model only suports 32k Context window https://ai.google.dev/gemini-api/docs/live-guide#context-window
+  context_window:
+    trigger_tokens: 24576
+    sliding_window_target_tokens: 12000
+  
+  # Session resumption configuration
+  session_resumption:
+    enabled: true
+  
+  # Audio transcription for VRChat text output, Leave it on what it is.
+  output_audio_transcription: {}
+  
+  # Audio transcription for user input, Leave it on what it is.
+  input_audio_transcription: {}
+  
+  # System instruction
+  prompt: "normal"
+  
+  # Custom prompt (used when prompt is set to "custom")
+  custom_prompt: "You are an LLM by Google, a helpful assistant."
+  # Thinking configuration (Gemini 'thinking' feature) Only on Gemini 2.5 Flash Native Audio Preview and above
+  thinking_budget: 1024
+
+# Tools Configuration
+tools:
+  # Enable Google Search tool
+  google_search: true
+  
+  # Enable memory system
+  memory_system: true
+  
+  # Custom function declarations (empty by default)
+  function_declarations: []
+
+# Video Configuration
+video:
+  # Camera settings
+  camera:
+    device_index: 0
+    frame_delay: 1.0  # seconds between frames
+  
+  # Screen capture settings
+  screen:
+    monitor_index: 0
+    frame_delay: 2  # seconds between frames
+  
+  # Image processing
+  image:
+    thumbnail_size: [1024, 1024]
+    format: "jpeg"
+    mime_type: "image/jpeg"
+
+# Queue Configuration, I think this is max audio/sound effects that can be queued at once.
+queues:
+  output_queue_maxsize: 20
+
+# Debug Configuration
+debug:
+  exception_on_overflow: false
+
+# Logging Configuration
+logging:
+  # Main application log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"
+  
+  # Suppress Google GenAI non-data parts warnings
+  suppress_genai_warnings: true
+  
+  # Specific logger levels
+  loggers:
+    google_genai.types: "ERROR"  # Suppress warnings from google_genai.types
+
+# Session Management Configuration
+session_management:
+  # Automatic reconnection settings
+  auto_reconnect:
+    enabled: true
+    max_retries: 2000      # 2000 cause long length
+    initial_delay: 1.0     # seconds
+    max_delay: 10.0        # seconds
+    exponential_base: 1.5  # Moderate exponential growth
+    jitter: 0.1            # 10% randomness
+  
+  # Connection monitoring
+  monitoring:
+    heartbeat_interval: 30.0  # seconds
+    connection_timeout: 60.0  # seconds
+
+# VRChat API configuration (used by vrchat_tools)
+vrchat:
+  # Application identification required by VRChat API (can also be set via env: VRCHAT_APP_NAME, VRCHAT_APP_VERSION, VRCHAT_APP_CONTACT)
+  application:
+    name: "ChangeMe"
+    version: "1.0.0"
+    contact: "hello@example.com"  # email or URL
+
+  credentials:
+    username: "ChangeMe"
+    password: "ChangeMe"
+    # For accounts with 2FA: set either a one-time code or a TOTP secret (prefer env VRC_2FA_CODE/VRC_TOTP_SECRET)
+    two_factor_code: ""
+    totp_secret: ""
+
+# VRChat OSC Integration Configuration
+osc:
+  # Enable/disable VRChat OSC integration
+  enabled: true
+  
+  # VRChat OSC connection settings
+  host: "127.0.0.1"     # VRChat host
+  port: 9000            # VRChat OSC input port (default: 9000)
+  
+  # Chatbox configuration
+  chatbox:
+    max_length: 144           # VRChat chatbox character limit
+    send_immediately: true    # Send messages immediately (true) or show typing interface (false)
+    notification_sound: false  # Play notification sound when message is sent
+    auto_clear_delay: 0       # Auto-clear message after X seconds (0 = disabled)
+    prefix: ""          # Prefix for all messages
+    enable_typing_indicator: true  # Show typing indicator when the Model is speaking
+  
+  # Message filtering and processing
+  filter:
+    strip_markdown: true         # Remove markdown formatting
+    remove_special_chars: false  # Remove special characters
+    split_long_messages: true    # Split messages longer than max_length
+    message_delay: 5.0          # Delay between split message parts (seconds)
+
+  chatbox_ui:
+    enabled: true
+    idle_refresh_seconds: 30
+    sweep_frames: 4
+    sweep_frame_delay: 0.08
+    show_timezone: true
+    title: "Change Me - example.com"
+    two_part_enabled: true
+    # Marquee is for the V2 Mode "Gemini 2.5 Flash Native Audio Preview"
+    marquee_interval_seconds: 2.0
+    marquee_window_chars: 40
+    marquee_scroll_step: 5
+    marquee_mode: paginate
+    empty_ticks_to_idle: 2
+    divider: "---------------------------------------------"
+    prompt_line: "Ask Anything!"
+    message_template: |
+      {title}
+      {time}
+      {divider}
+      {prompt_line}
+      Active time: {active_time}
+      Current Avatar: {avatar}
+
+# Memory System Configuration
+memory:
+  # Enable/disable memory integration in system prompts
+  enabled: true
+  
+  # Number of recent memories to include in system prompt
+  recent_memories_count: 10
+  
+  # MongoDB connection settings
+  mongo:
+    uri: ""
+    host: ""
+    username: ""
+    uri_env_var: ""
+    password_env_var: ""
+    database_env_var: ""
+    collection_env_var: ""
+    database: ""
+    collection: ""
+  
+  # Memory formatting options
+  format:
+    include_timestamps: true      # Include creation dates
+    include_categories: true      # Include memory categories
+    max_content_length: 512      # Maximum characters per memory content
+
+  # Note/quick note behavior
+  notes:
+    enabled: true                  # Master switch for note saving
+    default_type: "quick_note"     # Default type for note_* keys (short_term | quick_note | long_term)
+    min_interval_seconds: 30      # Rate limit notes (minimum seconds between saves)
+    dedupe_window_seconds: 300     # Suppress identical notes seen within this window
+
+# Movement Configuration
+movement:
+  # Optional override for OSC target (falls back to osc.host/osc.port if not set)
+  host: "127.0.0.1"
+  port: 9000
+
+  # View turning
+  use_axis: false               # Use axis for turning instead of left/right buttons
+  axis_turn_value: 1.0          # Axis intensity when turning left/right
+  turn_duration_default: 1.0    # Default duration for look_turn()
+  # Backwards-compat keys used if look_behind_min/max not set
+  turn_duration_min: 1.0        # Legacy min duration for look_behind()
+  turn_duration_max: 5.0        # Legacy max duration for look_behind()
+  # Preferred keys for look_behind duration range
+  look_behind_min: 0.3          # Min duration for look_behind()
+  look_behind_max: 0.3          # Max duration for look_behind()
+  randomize_back_turn: true     # Randomize left/right on look_behind()
+
+  # Movement
+  move_duration_default: 1.0    # Default duration for move_direction()
+  allow_run: true               # Allow holding Run while moving
+  run_by_default: false         # Hold Run by default when move_direction() is called with run omitted
+
+  # Keyboard injection (for actions without OSC like crouch/crawl)
+  key_inject_pause: 0.0         # Pause between PyDirectInput actions
+  key_tap_duration: 0.05        # Tap duration for toggle keys (e.g., crouch 'C', crawl 'Z')

@@ -1,0 +1,7 @@
+{
+  "default": {
+    "name": "Default prompt",
+    "description": "Description of the default prompt.",
+    "prompt": "The default prompt content goes here. this is where you put your system prompt or instructions."
+  }
+}

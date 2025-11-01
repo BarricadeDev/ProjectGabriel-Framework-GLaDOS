@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> Control Panel</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-robot"></i>  Control Panel</h1>
+                <div class="header-nav">
+                    <nav class="main-nav">
+                        <a href="index.html" class="nav-link active">
+                            <i class="fas fa-home"></i> Home
+                        </a>
+                        <a href="memory.html" class="nav-link">
+                            <i class="fas fa-brain"></i> Memory
+                        </a>
+                    </nav>
+                    <div class="header-actions">
+                        <button id="reconnectButton" class="btn btn-sm btn-secondary" title="Reconnect using last saved session">
+                            <i class="fas fa-sync-alt"></i> Reconnect
+                        </button>
+                        <button id="freshStartButton" class="btn btn-sm btn-primary" title="Clear session and restart fresh">
+                            <i class="fas fa-redo"></i> Fresh Start
+                        </button>
+                    </div>
+                    <div class="status-indicator">
+                        <span class="status-dot" id="statusDot"></span>
+                        <span class="status-text" id="statusText">Checking...</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section class="controls-section">
+                <div class="card">
+                    <h2><i class="fas fa-sliders-h"></i> Controls</h2>
+                    
+                    <div class="control-group">
+                        <label class="toggle-label">
+                            <span class="control-label">
+                                <i class="fas fa-microphone"></i> Yap Mode
+                            </span>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="yapModeToggle">
+                                <span class="slider"></span>
+                            </div>
+                        </label>
+                        <small class="control-description">Enable/disable the ability to interrupt during conversations</small>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="toggle-label">
+                            <span class="control-label">
+                                <i class="fas fa-rocket"></i> V2 Mode
+                            </span>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="v2ModeToggle">
+                                <span class="slider"></span>
+                            </div>
+                        </label>
+                        <small class="control-description">Switch between V1 (standard) and V2 (enhanced) AI modes</small>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="api-status">
+                            <span class="control-label">
+                                <i class="fas fa-server"></i> API Status
+                            </span>
+                            <span class="api-status-badge" id="apiStatus">Checking...</span>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="api-status">
+                            <span class="control-label">
+                                <i class="fas fa-wifi"></i> Real-time Monitor
+                            </span>
+                            <span class="api-status-badge" id="wsStatus">Connecting...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2><i class="fas fa-vr-cardboard"></i> VRChat Controls</h2>
+                    
+                    <div class="control-group">
+                        <button id="safeModeButton" class="btn btn-warning">
+                            <i class="fas fa-shield-alt"></i> Enable Safe Mode
+                        </button>
+                        <small class="control-description">| Activates Safe Mode</small>
+                    </div>
+
+                    <div class="control-group">
+                        <label class="toggle-label">
+                            <span class="control-label">
+                                <i class="fas fa-microphone"></i> Voice Enabled
+                            </span>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="voiceToggle" checked>
+                                <span class="slider"></span>
+                            </div>
+                        </label>
+                        <small class="control-description">Toggle your voice/microphone in VRChat</small>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="api-status">
+                            <span class="control-label">
+                                <i class="fas fa-vr-cardboard"></i> VRChat OSC
+                            </span>
+                            <span class="api-status-badge" id="vrchatStatus">Checking...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="console-section">
+                <div class="card console-card">
+                    <div class="console-header">
+                        <h2><i class="fas fa-terminal"></i> Response Console</h2>
+                        <div class="console-controls">
+                            <button id="showLegend" class="btn btn-secondary btn-small">
+                                <i class="fas fa-info-circle"></i> Legend
+                            </button>
+                            <button id="clearConsole" class="btn btn-secondary btn-small">
+                                <i class="fas fa-trash"></i> Clear
+                            </button>
+                            <button id="toggleAutoScroll" class="btn btn-secondary btn-small">
+                                <i class="fas fa-arrow-down"></i> Auto-scroll: ON
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="messageLegend" class="message-legend hidden">
+                        <h3>Message Types</h3>
+                        <div class="legend-items">
+                            <div class="legend-item">
+                                <span class="legend-color user-speech"></span>
+                                <span>User Speech (Audio Input)</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color info"></span>
+                                <span>User Text Messages</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color response"></span>
+                                <span> Responses</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color system"></span>
+                                <span>System Instructions</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color success"></span>
+                                <span>Success Messages</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color warning"></span>
+                                <span>Warnings</span>
+                            </div>
+                            <div class="legend-item">
+                                <span class="legend-color error"></span>
+                                <span>Errors</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="console-content">
+                        <div id="consoleOutput" class="console-output">
+                        </div>
+                    </div>
+                    
+                    <div class="console-input">
+                        <div class="message-type-selector">
+                            <label class="radio-label">
+                                <input type="radio" name="messageType" value="normal" checked>
+                                <span class="radio-custom"></span>
+                                <span class="radio-text">Normal Message</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="messageType" value="system">
+                                <span class="radio-custom"></span>
+                                <span class="radio-text">System Instruction</span>
+                            </label>
+                        </div>
+
+                        <div class="input-group">
+                            <textarea 
+                                id="messageInput" 
+                                placeholder="Type your message here..." 
+                                rows="2"
+                                maxlength="1000"
+                            ></textarea>
+                            <div class="input-footer">
+                                <span class="char-counter" id="charCounter">0/1000</span>
+                                <button id="sendButton" class="btn btn-primary">
+                                    <i class="fas fa-paper-plane"></i> Send
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="personalities-section">
+                <div class="card personalities-card">
+                    <div class="personalities-header">
+                        <h2><i class="fas fa-user-friends"></i> Personalities</h2>
+                        <div class="personalities-controls">
+                            <button id="refreshPersonalities" class="btn btn-secondary btn-small">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="currentPersonality" class="current-personality">
+                        <div class="current-personality-content">
+                            <span class="current-label">Current:</span>
+                            <span id="currentPersonalityName" class="current-name">None</span>
+                        </div>
+                    </div>
+                    
+                    <div class="personalities-content">
+                        <div id="personalitiesList" class="personalities-list">
+                            <!-- Personality buttons will be added dynamically by JavaScript -->
+                            <div class="personalities-loading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <span>Loading personalities...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2025  Hoppou.AI Project Gabriel Framework.</p>
+        </footer>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span>Sending message...</span>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
