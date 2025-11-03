@@ -19,7 +19,7 @@ defaults:
 # API Configuration
 api:
   version: "v1beta"
-  api_key: "https://aistudio.google.com/api-keys"
+  api_key: ""
   
   # Backup API Keys for automatic failover when quota is exceeded, You can add multiple keys here
   backup_api_keys:
@@ -42,14 +42,29 @@ webhooks:
 
 # Live Connect Configuration
 live_connect:
-  # Response modalities
+  # TTS Provider Configuration
+  tts_provider: "glados"  # Options: "gemini", "glados"
+  
+  # GLaDOS TTS Configuration (used when tts_provider is "glados")
+  glados_tts:
+    enabled: true
+    url: "http://localhost:5050"
+    voice: "glados"
+    response_format: "mp3"  # Options: mp3, wav, ogg
+    speed: 1.0
+    # Voice Activity Detection for interruption (requires webrtcvad: pip install webrtcvad)
+    vad_interruption: true        # Enable VAD-based interruption
+    vad_aggressiveness: 2         # VAD aggressiveness level (0-3): 0=least, 3=most aggressive
+    vad_frames_required: 10        # Consecutive speech frames to trigger interruption
+  
+  # Response modalities (automatically set to TEXT when using GLaDOS TTS)
   response_modalities:
     - "AUDIO"
   
   # Media resolution
   media_resolution: "MEDIA_RESOLUTION_LOW" # Or "MEDIA_RESOLUTION_HIGH"
   
-  # Speech configuration
+  # Speech configuration (used when tts_provider is "gemini")
   speech: # The language code also defines the Accent of the voice
     language_code: "en-US" # https://ai.google.dev/gemini-api/docs/live-guide#supported-languages
     voice:
@@ -71,7 +86,7 @@ live_connect:
   input_audio_transcription: {}
   
   # System instruction
-  prompt: "normal"
+  prompt: "default"
   
   # Custom prompt (used when prompt is set to "custom")
   custom_prompt: "You are an LLM by Google, a helpful assistant."

@@ -23,3 +23,5 @@ fastapi
 uvicorn
 pydantic
 websockets
+aiohttp
+webrtcvad

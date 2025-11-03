@@ -8,11 +8,21 @@ import json
 import logging
 import time
 import random
+import aiohttp
+from io import BytesIO
+import struct
 
 import cv2
 import pyaudio
 import PIL.Image
 import mss
+
+try:
+    import webrtcvad
+    WEBRTCVAD_AVAILABLE = True
+except ImportError:
+    WEBRTCVAD_AVAILABLE = False
+    webrtcvad = None
 try:
     from mss import tools as mss_tools
 except Exception:
@@ -310,6 +320,17 @@ def setup_globals(config, prompts=None):
     context_window_config = live_config.get('context_window', {})
     session_resumption_config = live_config.get('session_resumption', {})
 
+    # Check TTS provider and adjust response modalities
+    tts_provider = live_config.get('tts_provider', 'gemini')
+    response_modalities = live_config.get('response_modalities', ["AUDIO"])
+    
+    if tts_provider == 'glados':
+        # Force TEXT mode when using GLaDOS TTS
+        response_modalities = ["TEXT"]
+        logger.info("Using GLaDOS TTS provider - switching to TEXT mode")
+    else:
+        logger.info("Using Gemini TTS provider - using configured modalities")
+
     # Setup session resumption configuration
     session_resumption = None
     if session_resumption_config.get('enabled', False):
@@ -320,7 +341,7 @@ def setup_globals(config, prompts=None):
         )
 
     CONFIG = types.LiveConnectConfig(
-        response_modalities=live_config.get('response_modalities', ["AUDIO"]),
+        response_modalities=response_modalities,
         media_resolution=live_config.get('media_resolution', "MEDIA_RESOLUTION_MEDIUM"),
         speech_config=types.SpeechConfig(
             language_code=speech_config.get('language_code', 'ta-IN'),
@@ -733,6 +754,34 @@ class AudioLoop:
         
         # Initialize session manager
         self.session_manager = SessionManager(self.config)
+        
+        # TTS provider configuration
+        live_config = self.config.get('live_connect', {})
+        self.tts_provider = live_config.get('tts_provider', 'gemini')
+        self.glados_config = live_config.get('glados_tts', {})
+        
+        # GLaDOS playback control
+        self.glados_playback_active = False
+        self.glados_stop_playback = False
+        
+        # VAD (Voice Activity Detection) for interruption
+        glados_tts_config = live_config.get('glados_tts', {})
+        self.vad_enabled = glados_tts_config.get('vad_interruption', True) and WEBRTCVAD_AVAILABLE
+        self.vad_aggressiveness = glados_tts_config.get('vad_aggressiveness', 2)  # 0-3, higher = more aggressive
+        self.vad_frames_required = glados_tts_config.get('vad_frames_required', 3)
+        self.vad_voice_detected_count = 0
+        
+        # Initialize WebRTC VAD
+        self.vad = None
+        if self.vad_enabled:
+            try:
+                self.vad = webrtcvad.Vad(self.vad_aggressiveness)
+                logger.info(f"WebRTC VAD initialized with aggressiveness level {self.vad_aggressiveness}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize WebRTC VAD: {e}")
+                self.vad_enabled = False
+        elif self.tts_provider == 'glados':
+            logger.warning("webrtcvad not available - VAD interruption disabled. Install with: pip install webrtcvad")
 
         self.audio_in_queue = None
         self.out_queue = None
@@ -741,6 +790,7 @@ class AudioLoop:
         
         self.receive_audio_task = None
         self.play_audio_task = None
+        self.vad_monitor_task = None
         
         # V2 mode switching
         self.switch_to_v2_requested = False
@@ -894,6 +944,94 @@ class AudioLoop:
             msg = await self.out_queue.get()
             await self.session.send(input=msg)
 
+    async def synthesize_glados_tts(self, text: str) -> bytes:
+        """Synthesize speech using GLaDOS TTS API."""
+        url = self.glados_config.get('url', 'http://localhost:5050')
+        voice = self.glados_config.get('voice', 'glados')
+        response_format = self.glados_config.get('response_format', 'mp3')
+        speed = self.glados_config.get('speed', 1.0)
+        
+        endpoint = f"{url}/v1/audio/speech"
+        payload = {
+            "input": text,
+            "voice": voice,
+            "response_format": response_format,
+            "speed": speed
+        }
+        
+        logger.info(f"Calling GLaDOS TTS API at {endpoint} with text: '{text[:50]}...'")
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(endpoint, json=payload) as response:
+                    logger.info(f"GLaDOS TTS API response status: {response.status}")
+                    if response.status in (200, 201):
+                        audio_data = await response.read()
+                        logger.info(f"GLaDOS TTS generated {len(audio_data)} bytes of audio")
+                        return audio_data
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"GLaDOS TTS API error: {response.status} - {error_text}")
+                        return None
+        except Exception as e:
+            logger.error(f"Failed to call GLaDOS TTS API: {e}")
+            traceback.print_exc()
+            return None
+
+    async def play_glados_audio(self, audio_data: bytes):
+        """Play audio data from GLaDOS TTS using pygame."""
+        if not audio_data:
+            logger.warning("No audio data to play")
+            return
+        
+        try:
+            import pygame
+            
+            logger.info(f"Playing GLaDOS audio ({len(audio_data)} bytes)")
+            
+            # Initialize pygame mixer if not already initialized
+            if not pygame.mixer.get_init():
+                logger.info("Initializing pygame mixer")
+                pygame.mixer.init()
+            
+            # Save audio data to a BytesIO object
+            audio_buffer = BytesIO(audio_data)
+            
+            # Load and play the audio
+            logger.debug("Loading audio into pygame mixer")
+            await asyncio.to_thread(pygame.mixer.music.load, audio_buffer)
+            
+            logger.debug("Starting audio playback")
+            self.glados_playback_active = True
+            self.glados_stop_playback = False
+            self.vad_voice_detected_count = 0  # Reset counter
+            
+            if self.vad_enabled and self.vad:
+                logger.info("VAD interruption monitoring ACTIVE - speak to interrupt")
+            
+            await asyncio.to_thread(pygame.mixer.music.play)
+            
+            # Wait for playback to finish or interruption
+            logger.debug("Waiting for playback to complete")
+            while pygame.mixer.music.get_busy() and not self.glados_stop_playback:
+                await asyncio.sleep(0.1)
+            
+            # If interrupted, stop the music
+            if self.glados_stop_playback:
+                logger.info("GLaDOS audio playback interrupted - stopping")
+                await asyncio.to_thread(pygame.mixer.music.stop)
+            else:
+                logger.info("GLaDOS audio playback completed")
+            
+            self.glados_playback_active = False
+                
+        except ImportError:
+            logger.error("pygame is required for GLaDOS TTS playback. Install it with: pip install pygame")
+        except Exception as e:
+            logger.error(f"Error playing GLaDOS audio: {e}")
+            traceback.print_exc()
+            self.glados_playback_active = False
+
     async def listen_audio(self):
         mic_info = pya.get_default_input_device_info()
         self.audio_stream = await asyncio.to_thread(
@@ -915,6 +1053,64 @@ class AudioLoop:
         try:
             while True:
                 data = await asyncio.to_thread(self.audio_stream.read, CHUNK_SIZE, **kwargs)
+                
+                # Check for voice activity for GLaDOS interruption using WebRTC VAD
+                # This needs to happen BEFORE any other checks so we can detect interruptions
+                vad_should_check = (
+                    self.tts_provider == 'glados' 
+                    and self.vad_enabled 
+                    and self.glados_playback_active 
+                    and self.vad
+                )
+                
+                if vad_should_check:
+                    try:
+                        # WebRTC VAD requires specific frame lengths:
+                        # For 16000 Hz: 10ms=160, 20ms=320, 30ms=480 samples
+                        # Our CHUNK_SIZE (1024) doesn't match, so we need to process valid frames
+                        
+                        # Calculate valid frame size (30ms at 16000 Hz = 480 samples = 960 bytes for 16-bit audio)
+                        vad_frame_size = 480  # 30ms at 16000 Hz
+                        vad_frame_bytes = vad_frame_size * 2  # 2 bytes per sample for 16-bit audio
+                        
+                        # Process the first valid frame from the chunk
+                        if len(data) >= vad_frame_bytes:
+                            vad_frame = data[:vad_frame_bytes]
+                            is_speech = self.vad.is_speech(vad_frame, SEND_SAMPLE_RATE)
+                            
+                            if is_speech:
+                                self.vad_voice_detected_count += 1
+                                if self.vad_voice_detected_count >= self.vad_frames_required:
+                                    logger.info(f"VAD detected speech - interrupting GLaDOS playback (frames: {self.vad_voice_detected_count})")
+                                    self.glados_stop_playback = True
+                                    self.vad_voice_detected_count = 0
+                                    
+                                    # Notify services of interruption
+                                    try:
+                                        if MYINSTANTS_AVAILABLE and myinstants_client:
+                                            myinstants_client.notify_ai_speech_ended()
+                                    except Exception:
+                                        pass
+                                    try:
+                                        osc.notify_ai_speech_end()
+                                    except Exception:
+                                        pass
+                                    try:
+                                        if hasattr(memory_tools, 'set_ai_speaking'):
+                                            memory_tools.set_ai_speaking(False)
+                                    except Exception:
+                                        pass
+                                else:
+                                    logger.debug(f"VAD speech detected ({self.vad_voice_detected_count}/{self.vad_frames_required})")
+                            else:
+                                # Decay counter when no speech detected
+                                if self.vad_voice_detected_count > 0:
+                                    logger.debug(f"VAD no speech - decaying counter from {self.vad_voice_detected_count}")
+                                self.vad_voice_detected_count = max(0, self.vad_voice_detected_count - 1)
+                    except Exception as vad_error:
+                        # Log VAD errors but don't crash
+                        logger.warning(f"VAD processing error: {vad_error}")
+                
                 # If yap mode is enabled AND AI is speaking, drop mic input to prevent interruptions
                 try:
                     if (
@@ -951,6 +1147,7 @@ class AudioLoop:
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
         current_text_response = ""  # Accumulate text for VRChat
+        glados_text_buffer = ""  # Buffer for GLaDOS TTS
         
         while True:
             try:
@@ -1009,6 +1206,10 @@ class AudioLoop:
                     # Accumulate text for VRChat
                     current_text_response += text
                     
+                    # If using GLaDOS TTS, accumulate text for synthesis
+                    if self.tts_provider == 'glados':
+                        glados_text_buffer += text
+                    
                     # Broadcast to WebSocket clients if available
                     if CHAT_API_AVAILABLE and chat_api:
                         try:
@@ -1016,7 +1217,7 @@ class AudioLoop:
                         except Exception as e:
                             logger.warning(f"Failed to broadcast text to WebSocket clients: {e}")
                 
-                # Handle audio transcriptions (for AUDIO mode with transcription enabled)
+                # Handle server content (transcriptions, interruptions already handled above)
                 if hasattr(response, 'server_content') and response.server_content:
                     # Handle user input transcription
                     if hasattr(response.server_content, 'input_transcription') and response.server_content.input_transcription:
@@ -1123,8 +1324,51 @@ class AudioLoop:
                         chat_api.broadcast_gabriel_response(current_text_response.strip(), "complete_response")
                     except Exception as e:
                         logger.warning(f"Failed to broadcast complete response to WebSocket clients: {e}")
+                
+                # If using GLaDOS TTS, synthesize and play the audio
+                if self.tts_provider == 'glados' and glados_text_buffer.strip():
+                    # Double-check interruption flag before synthesis
+                    if self.glados_stop_playback:
+                        logger.info("Skipping TTS synthesis - interruption detected")
+                        glados_text_buffer = ""
+                    else:
+                        try:
+                            logger.info("Synthesizing speech with GLaDOS TTS...")
+                            # Notify that AI is starting to speak
+                            try:
+                                if MYINSTANTS_AVAILABLE and myinstants_client:
+                                    myinstants_client.notify_ai_audio_received()
+                            except Exception:
+                                pass
+                            try:
+                                osc.notify_ai_speech_start()
+                            except Exception:
+                                pass
+                            try:
+                                if hasattr(memory_tools, 'set_ai_speaking'):
+                                    memory_tools.set_ai_speaking(True)
+                            except Exception:
+                                pass
+                            
+                            # Synthesize and play audio
+                            audio_data = await self.synthesize_glados_tts(glados_text_buffer.strip())
+                            
+                            # Check again before playback in case of interruption during synthesis
+                            if audio_data and not self.glados_stop_playback:
+                                await self.play_glados_audio(audio_data)
+                            elif self.glados_stop_playback:
+                                logger.info("Skipping audio playback - interruption detected during synthesis")
+                            else:
+                                logger.warning("GLaDOS TTS synthesis failed, skipping audio playback")
+                        except Exception as glados_error:
+                            logger.error(f"Error with GLaDOS TTS: {glados_error}")
+                            traceback.print_exc()
+                        finally:
+                            glados_text_buffer = ""  # Reset buffer
+                            # Reset stop flag for next turn
+                            self.glados_stop_playback = False
                         
-                current_text_response = ""  # Reset for next turn
+            current_text_response = ""  # Reset for next turn
                 
             # Turn complete - notify MyInstants that speech has ended
             try:
@@ -1268,7 +1512,13 @@ class AudioLoop:
                     tg.create_task(self.get_screen())
 
                 tg.create_task(self.receive_audio())
-                tg.create_task(self.play_audio())
+                
+                # Only start Gemini audio playback if not using GLaDOS TTS
+                if self.tts_provider != 'glados':
+                    tg.create_task(self.play_audio())
+                else:
+                    logger.info("GLaDOS TTS mode - skipping Gemini audio playback task")
+                
                 tg.create_task(self._monitor_connection_lifetime())
 
                 # Keep the session running indefinitely until interrupted

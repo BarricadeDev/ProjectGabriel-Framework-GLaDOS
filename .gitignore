@@ -10,3 +10,6 @@ test_sfx_import.py
 last_avatar.json
 last_session.json
 api\__pycache__
+/api/__pycache__
+test_glados_output.mp3
+/GLaDOS
