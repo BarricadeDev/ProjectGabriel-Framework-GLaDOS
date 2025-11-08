@@ -1053,9 +1053,16 @@ class AudioLoop:
         try:
             while True:
                 data = await asyncio.to_thread(self.audio_stream.read, CHUNK_SIZE, **kwargs)
-                
-                # Check for voice activity for GLaDOS interruption using WebRTC VAD
-                # This needs to happen BEFORE any other checks so we can detect interruptions
+
+                yap_guard_active = False
+                try:
+                    yap_guard_active = (
+                        getattr(memory_tools, 'is_yap_mode_enabled', lambda: False)()
+                        and getattr(memory_tools, 'is_ai_speaking', lambda: False)()
+                    )
+                except Exception:
+                    yap_guard_active = False
+                    
                 vad_should_check = (
                     self.tts_provider == 'glados' 
                     and self.vad_enabled 
@@ -1063,7 +1070,10 @@ class AudioLoop:
                     and self.vad
                 )
                 
-                if vad_should_check:
+                if yap_guard_active:
+                    # Ensure accumulated detections do not trigger post-yap
+                    self.vad_voice_detected_count = 0
+                elif vad_should_check:
                     try:
                         # WebRTC VAD requires specific frame lengths:
                         # For 16000 Hz: 10ms=160, 20ms=320, 30ms=480 samples
@@ -1112,15 +1122,8 @@ class AudioLoop:
                         logger.warning(f"VAD processing error: {vad_error}")
                 
                 # If yap mode is enabled AND AI is speaking, drop mic input to prevent interruptions
-                try:
-                    if (
-                        getattr(memory_tools, 'is_yap_mode_enabled', lambda: False)()
-                        and getattr(memory_tools, 'is_ai_speaking', lambda: False)()
-                    ):
-                        continue
-                except Exception:
-                    # If tools not initialized yet, fall back to sending
-                    pass
+                if yap_guard_active:
+                    continue
                 await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
         except asyncio.CancelledError:
             logger.debug("listen_audio task cancelled")
