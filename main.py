@@ -325,9 +325,9 @@ def setup_globals(config, prompts=None):
     response_modalities = live_config.get('response_modalities', ["AUDIO"])
     
     if tts_provider == 'glados':
-        # Force TEXT mode when using GLaDOS TTS
-        response_modalities = ["TEXT"]
-        logger.info("Using GLaDOS TTS provider - switching to TEXT mode")
+        # Keep AUDIO mode and use output_audio_transcription for text extraction
+        response_modalities = ["AUDIO"]
+        logger.info("Using GLaDOS TTS provider - using AUDIO mode with transcription")
     else:
         logger.info("Using Gemini TTS provider - using configured modalities")
 
@@ -1241,6 +1241,10 @@ class AudioLoop:
                         if transcription_text:
                             # Accumulate transcription text for VRChat
                             current_text_response += transcription_text
+                            
+                            # If using GLaDOS TTS, accumulate text for synthesis
+                            if self.tts_provider == 'glados':
+                                glados_text_buffer += transcription_text
                             
                             # Broadcast to WebSocket clients if available
                             if CHAT_API_AVAILABLE and chat_api:
