@@ -3,7 +3,9 @@ Yap mode tools for Gabriel "Arre Yaar ENABLE YAP MODE"
 """
 
 import logging
-from typing import Dict, Any
+import time
+import asyncio
+from typing import Dict, Any, Optional
 from google.genai import types
 
 logger = logging.getLogger(__name__)
@@ -12,6 +14,9 @@ logger = logging.getLogger(__name__)
 _YAP_MODE_ENABLED: bool = False
 _AI_SPEAKING: bool = False
 _YAP_TURNS_REMAINING: int = 0
+_YAP_TIMER_TASK: Optional[asyncio.Task] = None
+_YAP_ENABLE_TIME: float = 0.0
+_YAP_DURATION: float = 30.0  # Default 30 seconds
 
 
 def is_yap_mode_enabled() -> bool:
@@ -19,18 +24,39 @@ def is_yap_mode_enabled() -> bool:
     return _YAP_MODE_ENABLED
 
 
-def set_yap_mode(enabled: bool) -> None:
-    """Set yap mode on or off."""
-    global _YAP_MODE_ENABLED
-    global _YAP_TURNS_REMAINING
+def set_yap_mode(enabled: bool, duration: float = 30.0) -> None:
+    """Set yap mode on or off.
+    
+    Args:
+        enabled: Whether to enable yap mode
+        duration: Duration in seconds before auto-disable (default 30s, max 60s)
+    """
+    global _YAP_MODE_ENABLED, _YAP_TURNS_REMAINING, _YAP_TIMER_TASK, _YAP_ENABLE_TIME, _YAP_DURATION
+    
     prev = _YAP_MODE_ENABLED
     _YAP_MODE_ENABLED = bool(enabled)
     
+    # Cancel existing timer if any
+    if _YAP_TIMER_TASK and not _YAP_TIMER_TASK.done():
+        _YAP_TIMER_TASK.cancel()
+        _YAP_TIMER_TASK = None
+    
     if _YAP_MODE_ENABLED:
-        _YAP_TURNS_REMAINING = 3
+        _YAP_TURNS_REMAINING = 3  # Keep for legacy compatibility
+        _YAP_ENABLE_TIME = time.time()
+        _YAP_DURATION = min(max(1.0, duration), 60.0)  # Clamp between 1-60 seconds
+        logger.info(f"Yap mode ENABLED (was {'ENABLED' if prev else 'DISABLED'}); will auto-disable in {_YAP_DURATION}s")
+        
+        # Start background timer
+        try:
+            loop = asyncio.get_event_loop()
+            _YAP_TIMER_TASK = loop.create_task(_yap_timer_task())
+        except RuntimeError:
+            logger.warning("No event loop available to start YAP timer")
     else:
         _YAP_TURNS_REMAINING = 0
-    logger.info(f"Yap mode {'ENABLED' if _YAP_MODE_ENABLED else 'DISABLED'} (was {'ENABLED' if prev else 'DISABLED'}); turns_remaining={_YAP_TURNS_REMAINING}")
+        _YAP_ENABLE_TIME = 0.0
+        logger.info(f"Yap mode DISABLED (was {'ENABLED' if prev else 'DISABLED'})")
 
 
 def is_ai_speaking() -> bool:
@@ -75,17 +101,52 @@ def get_yap_turns_remaining() -> int:
     return _YAP_TURNS_REMAINING
 
 
+async def _yap_timer_task():
+    """Background task to auto-disable YAP mode after duration expires."""
+    global _YAP_MODE_ENABLED, _YAP_ENABLE_TIME, _YAP_DURATION
+    
+    try:
+        await asyncio.sleep(_YAP_DURATION)
+        
+        # Check if YAP mode is still enabled and hasn't been manually disabled
+        if _YAP_MODE_ENABLED and _YAP_ENABLE_TIME > 0:
+            elapsed = time.time() - _YAP_ENABLE_TIME
+            logger.info(f"YAP mode auto-disabling after {elapsed:.1f}s (duration: {_YAP_DURATION}s)")
+            set_yap_mode(False)
+    except asyncio.CancelledError:
+        logger.debug("YAP timer task cancelled")
+    except Exception as e:
+        logger.error(f"Error in YAP timer task: {e}")
+
+
+def get_yap_time_remaining() -> float:
+    """Return seconds remaining before YAP mode auto-disables, or 0 if disabled."""
+    if not _YAP_MODE_ENABLED or _YAP_ENABLE_TIME == 0:
+        return 0.0
+    elapsed = time.time() - _YAP_ENABLE_TIME
+    remaining = max(0.0, _YAP_DURATION - elapsed)
+    return remaining
+
+
 
 YAP_FUNCTION_DECLARATIONS = [
     {
         "name": "enable_yap_mode",
         "description": (
             "Disable microphone input so the user cannot interrupt you. "
-            "Use this when you need to speak without being cut off. You must later call disable_yap_mode to re-enable input."
+            "YAP mode will automatically disable after the specified duration (default 30s, max 60s). "
+            "Use this when you need to speak without being cut off."
         ),
         "parameters": {
             "type": "object",
             "properties": {
+                "duration": {
+                    "type": "number",
+                    "description": "Duration in seconds before YAP mode auto-disables (default: 30, max: 60)",
+                    "default": 30.0,
+                    "minimum": 1.0,
+                    "maximum": 60.0
+                },
                 "reason": {
                     "type": "string",
                     "description": "Optional explanation shown in logs/UI for enabling yap mode.",
@@ -125,12 +186,14 @@ async def handle_yap_function_calls(function_call) -> types.FunctionResponse:
     args: Dict[str, Any] = function_call.args or {}
     try:
         if fname == "enable_yap_mode":
+            duration = args.get("duration", 30.0)
             reason = args.get("reason", "AI requires uninterrupted speaking")
-            set_yap_mode(True)
+            set_yap_mode(True, duration=duration)
             response = {
                 "success": True,
-                "message": f"Yap mode enabled. {reason}",
-                "yap_mode_enabled": True
+                "message": f"Yap mode enabled for {duration}s. {reason}",
+                "yap_mode_enabled": True,
+                "duration": duration
             }
         elif fname == "disable_yap_mode":
             reason = args.get("reason", "AI finished speaking uninterrupted")
@@ -143,7 +206,8 @@ async def handle_yap_function_calls(function_call) -> types.FunctionResponse:
         elif fname == "get_yap_mode_status":
             response = {
                 "success": True,
-                "yap_mode_enabled": is_yap_mode_enabled()
+                "yap_mode_enabled": is_yap_mode_enabled(),
+                "time_remaining_seconds": get_yap_time_remaining()
             }
         else:
             response = {

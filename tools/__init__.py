@@ -56,6 +56,7 @@ from .yap_tools import (
     set_ai_speaking,
     notify_ai_turn_complete,
     get_yap_turns_remaining,
+    get_yap_time_remaining,
 )
 from .audio_tools import (
     AUDIO_FUNCTION_DECLARATIONS,
@@ -207,4 +208,5 @@ __all__ = [
     'set_ai_speaking',
     'notify_ai_turn_complete',
     'get_yap_turns_remaining',
+    'get_yap_time_remaining',
 ]

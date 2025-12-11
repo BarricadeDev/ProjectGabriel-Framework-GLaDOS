@@ -1341,6 +1341,14 @@ class AudioLoop:
                     else:
                         try:
                             logger.info("Synthesizing speech with GLaDOS TTS...")
+                            
+                            # Mark AI as speaking BEFORE synthesis starts (for YAP mode)
+                            try:
+                                if hasattr(memory_tools, 'set_ai_speaking'):
+                                    memory_tools.set_ai_speaking(True)
+                            except Exception:
+                                pass
+                            
                             # Notify that AI is starting to speak
                             try:
                                 if MYINSTANTS_AVAILABLE and myinstants_client:
@@ -1349,11 +1357,6 @@ class AudioLoop:
                                 pass
                             try:
                                 osc.notify_ai_speech_start()
-                            except Exception:
-                                pass
-                            try:
-                                if hasattr(memory_tools, 'set_ai_speaking'):
-                                    memory_tools.set_ai_speaking(True)
                             except Exception:
                                 pass
                             
@@ -1374,6 +1377,13 @@ class AudioLoop:
                             glados_text_buffer = ""  # Reset buffer
                             # Reset stop flag for next turn
                             self.glados_stop_playback = False
+                            
+                            # Mark AI as no longer speaking after GLaDOS playback
+                            try:
+                                if hasattr(memory_tools, 'set_ai_speaking'):
+                                    memory_tools.set_ai_speaking(False)
+                            except Exception:
+                                pass
                         
             current_text_response = ""  # Reset for next turn
                 
